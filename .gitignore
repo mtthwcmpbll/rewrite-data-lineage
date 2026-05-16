@@ -1,0 +1,14 @@
+build/
+target/
+.gradle/
+.idea/
+out/
+src/main/generated/
+.vscode/
+*.iml
+.DS_Store
+.claude/settings.local.json
+
+# Moderne CLI
+.moderne/*
+!.moderne/context/

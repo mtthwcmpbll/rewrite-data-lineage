@@ -17,10 +17,16 @@ group = "com.snowfort.recipe"
 description = "Rewrite recipe for data lineage"
 
 // The lineage model uses Java records, so Java 17 is the floor.
+// Use the compiler `--release` flag (not a toolchain) so any JDK 17+ on the
+// build machine can produce the same Java 17 bytecode without needing a
+// toolchain provisioner configured.
 java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(17))
-    }
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(17)
 }
 
 recipeDependencies {

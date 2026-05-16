@@ -16,6 +16,13 @@ plugins {
 group = "com.snowfort.recipe"
 description = "Rewrite recipe for data lineage"
 
+// The lineage model uses Java records, so Java 17 is the floor.
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
+}
+
 recipeDependencies {
     parserClasspath("org.jspecify:jspecify:1.0.0")
 }
@@ -60,6 +67,7 @@ dependencies {
     testRuntimeOnly("org.apache.commons:commons-lang3:latest.release")
     testRuntimeOnly("org.springframework:spring-core:latest.release")
     testRuntimeOnly("org.springframework:spring-context:latest.release")
+    testRuntimeOnly("org.springframework:spring-web:latest.release")
 }
 
 signing {

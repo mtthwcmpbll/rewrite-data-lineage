@@ -15,3 +15,15 @@ displayName: Apply Recipe best practices
 description: Apply best practices to your recipes, through OpenRewrite's best practices recipe & IntelliJ IDEA plugin.
 recipeList:
   - org.openrewrite.recipes.rewrite.OpenRewriteRecipeBestPractices
+---
+type: specs.openrewrite.org/v1beta/recipe
+name: com.snowfort.recipe.lineage.FindDataLineageAggregate
+displayName: Find data lineage (aggregate)
+description: >-
+  Runs every data-lineage detection recipe and writes findings to the shared
+  data tables. Acts as the single entry point for the end-to-end pipeline.
+recipeList:
+  - com.snowfort.recipe.lineage.FindDataLineage
+  - com.snowfort.recipe.lineage.FindSpringHttpInSources
+  - com.snowfort.recipe.lineage.FindSpringHttpOutSinks
+  - com.snowfort.recipe.lineage.JoinHttpEdges

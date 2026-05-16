@@ -16,6 +16,19 @@ plugins {
 group = "com.snowfort.recipe"
 description = "Rewrite recipe for data lineage"
 
+// The lineage model uses Java records, so Java 17 is the floor.
+// Use the compiler `--release` flag (not a toolchain) so any JDK 17+ on the
+// build machine can produce the same Java 17 bytecode without needing a
+// toolchain provisioner configured.
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(17)
+}
+
 recipeDependencies {
     parserClasspath("org.jspecify:jspecify:1.0.0")
 }
@@ -60,6 +73,8 @@ dependencies {
     testRuntimeOnly("org.apache.commons:commons-lang3:latest.release")
     testRuntimeOnly("org.springframework:spring-core:latest.release")
     testRuntimeOnly("org.springframework:spring-context:latest.release")
+    testRuntimeOnly("org.springframework:spring-web:latest.release")
+    testRuntimeOnly("org.springframework:spring-webflux:latest.release")
 }
 
 signing {

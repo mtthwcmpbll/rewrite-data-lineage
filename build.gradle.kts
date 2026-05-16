@@ -13,8 +13,8 @@ plugins {
 }
 
 // Set as appropriate for your organization
-group = "com.yourorg"
-description = "Rewrite recipes."
+group = "com.snowfort.recipe"
+description = "Rewrite recipe for data lineage"
 
 recipeDependencies {
     parserClasspath("org.jspecify:jspecify:1.0.0")

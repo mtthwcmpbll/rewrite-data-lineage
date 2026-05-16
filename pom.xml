@@ -3,8 +3,8 @@
          xmlns="http://maven.apache.org/POM/4.0.0"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.yourorg</groupId>
-    <artifactId>rewrite-recipe-starter</artifactId>
+    <groupId>com.snowfort.recipe</groupId>
+    <artifactId>rewrite-data-lineage</artifactId>
     <version>0.1.0-SNAPSHOT</version>
 
     <prerequisites>
@@ -210,7 +210,7 @@
             </plugin>
             <!--
                 Only needed when you want to apply the OpenRewriteBestPractices recipe to your recipes through
-                ./mvnw rewrite:run -Drewrite.activeRecipes=com.yourorg.ApplyRecipeBestPractices
+                ./mvnw rewrite:run -Drewrite.activeRecipes=com.snowfort.recipe.ApplyRecipeBestPractices
             -->
             <plugin>
                 <groupId>org.openrewrite.maven</groupId>

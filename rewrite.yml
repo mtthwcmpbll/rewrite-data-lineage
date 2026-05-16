@@ -25,3 +25,4 @@ description: >-
 recipeList:
   - com.snowfort.recipe.lineage.FindDataLineage
   - com.snowfort.recipe.lineage.FindSpringHttpInSources
+  - com.snowfort.recipe.lineage.FindSpringHttpOutSinks

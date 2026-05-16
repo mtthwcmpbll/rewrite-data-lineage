@@ -24,3 +24,4 @@ description: >-
   data tables. Acts as the single entry point for the end-to-end pipeline.
 recipeList:
   - com.snowfort.recipe.lineage.FindDataLineage
+  - com.snowfort.recipe.lineage.FindSpringHttpInSources

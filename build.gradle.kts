@@ -60,6 +60,11 @@ dependencies {
     testRuntimeOnly("org.apache.commons:commons-lang3:latest.release")
     testRuntimeOnly("org.springframework:spring-core:latest.release")
     testRuntimeOnly("org.springframework:spring-context:latest.release")
+    // Spring web types needed by fixtures so the recipe's MethodMatcher/AnnotationMatcher can
+    // type-resolve @RestController/@*Mapping/@RequestBody, RestTemplate, and WebClient (research R7).
+    testRuntimeOnly("org.springframework:spring-web:latest.release")
+    testRuntimeOnly("org.springframework:spring-webflux:latest.release")
+    testRuntimeOnly("io.projectreactor:reactor-core:latest.release")
 }
 
 signing {

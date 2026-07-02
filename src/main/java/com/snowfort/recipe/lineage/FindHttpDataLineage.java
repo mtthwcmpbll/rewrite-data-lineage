@@ -11,6 +11,7 @@ import com.snowfort.recipe.lineage.model.Direction;
 import com.snowfort.recipe.lineage.model.ExternalIdentifier;
 import com.snowfort.recipe.lineage.source.SpringMvcInbound;
 import com.snowfort.recipe.lineage.source.SpringMvcSource;
+import com.snowfort.recipe.lineage.sink.FeignClientSink;
 import com.snowfort.recipe.lineage.sink.RestTemplateSink;
 import com.snowfort.recipe.lineage.sink.WebClientSink;
 import com.snowfort.recipe.lineage.table.DataFlowChainTable;
@@ -62,6 +63,7 @@ public class FindHttpDataLineage extends ScanningRecipe<LineageAccumulator> {
     private final transient SpringMvcSource springMvcSource = new SpringMvcSource();
     private final transient RestTemplateSink restTemplateSink = new RestTemplateSink();
     private final transient WebClientSink webClientSink = new WebClientSink();
+    private final transient FeignClientSink feignClientSink = new FeignClientSink();
 
     @Override
     public String getDisplayName() {
@@ -70,10 +72,10 @@ public class FindHttpDataLineage extends ScanningRecipe<LineageAccumulator> {
 
     @Override
     public String getDescription() {
-        return "Catalog inbound Spring MVC endpoints and outbound RestTemplate/WebClient calls as HTTP " +
-               "data nodes, and trace request data from an endpoint to an outbound call across method " +
-               "boundaries within the repository. Emits the HttpDataNodes and DataFlowChains data " +
-               "tables. Does not modify source.";
+        return "Catalog inbound Spring MVC endpoints and outbound RestTemplate/WebClient/Feign calls as " +
+               "HTTP data nodes, and trace request data from an endpoint to an outbound call across " +
+               "method boundaries within the repository. Emits the HttpDataNodes and DataFlowChains " +
+               "data tables. Does not modify source.";
     }
 
     @Override
@@ -113,11 +115,16 @@ public class FindHttpDataLineage extends ScanningRecipe<LineageAccumulator> {
                 String fqn = methodFqn(m.getMethodType());
                 cg.declareMethod(fqn);
                 J.ClassDeclaration enclosing = getCursor().firstEnclosing(J.ClassDeclaration.class);
-                Detection d = springMvcSource.detect(m, enclosing);
-                if (d != null) {
-                    DataFlowNode node = buildNode(getCursor(), d, fqn, m.getSimpleName());
+                Detection source = springMvcSource.detect(m, enclosing);
+                if (source != null) {
+                    DataFlowNode node = buildNode(getCursor(), source, fqn, m.getSimpleName());
                     acc.addNode(node);
                     cg.addSource(fqn, inboundOriginPositions(m), node);
+                }
+                // A declarative Feign endpoint is an outbound SINK declared on the interface method.
+                Detection feign = feignClientSink.detect(m, enclosing);
+                if (feign != null) {
+                    acc.addNode(buildNode(getCursor(), feign, fqn, m.getSimpleName()));
                 }
                 return m;
             }

@@ -144,8 +144,9 @@ captured in a form that matches (same normalized route and method), without yet 
 - **FR-007**: The system MUST NOT report a chain to an outbound call whose arguments carry no
   inbound-derived data.
 - **FR-008**: The system MUST detect outbound HTTP calls made through Spring's imperative HTTP clients
-  — `RestTemplate` and `WebClient`. Declarative Feign clients are out of scope for this MVP (deferred
-  to a later phase).
+  — `RestTemplate` and `WebClient` — and declarative Spring Cloud OpenFeign `@FeignClient` interfaces
+  (added 2026-07-02; catalog-level, the declared outbound contract). The Feign endpoint is detected at
+  its declaration, so it is cataloged even where the call site is not visible in the repository.
 - **FR-009**: When a payload type or an external identifier cannot be resolved, the system MUST emit
   the entry with an explicit unknown/partial marker rather than omitting it.
 - **FR-010**: The output MUST be queryable as structured data (filterable by source, sink, route,
@@ -211,5 +212,6 @@ captured in a form that matches (same normalized route and method), without yet 
 - Semantic transformation summaries (project/filter/join/aggregate classification) — this MVP produces
   the catalog and the raw chain, not the human-readable semantic narration.
 - Reactive WebFlux endpoints and non-Spring HTTP clients (e.g. raw `java.net.http`).
-- Declarative Feign clients as outbound sinks (deferred; RestTemplate + WebClient only for the MVP).
+- Tracing request data *into* a Feign call site as a chain (Feign is cataloged at its declaration;
+  call-site chains are a follow-up). RestTemplate/WebClient chains are supported.
 - Field-level data tracking.

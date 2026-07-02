@@ -15,7 +15,7 @@ repository, one row each. Catalog output for User Story 1.
 |--------------|-------------|------|-------------|
 | `nodeId` | Node ID | String | Stable synthetic id; referenced by the chain table. |
 | `direction` | Direction | String | `SOURCE` or `SINK`. |
-| `framework` | Framework | String | `SPRING_MVC`, `REST_TEMPLATE`, or `WEB_CLIENT`. |
+| `framework` | Framework | String | `SPRING_MVC`, `REST_TEMPLATE`, `WEB_CLIENT`, or `FEIGN`. |
 | `httpMethod` | HTTP method | String | `GET`/`POST`/… or `UNKNOWN`. |
 | `routeTemplate` | Route template | String | Normalized route, e.g. `/orders/{id}`. |
 | `routeResolution` | Route resolution | String | `EXACT` / `PARTIAL` / `UNKNOWN`. |

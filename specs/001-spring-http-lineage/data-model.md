@@ -35,7 +35,7 @@ One point where external data enters (SOURCE) or leaves (SINK) the service over 
 | Field | Type | Notes |
 |-------|------|-------|
 | `direction` | enum `Direction` {SOURCE, SINK} | SOURCE = inbound endpoint; SINK = outbound call. |
-| `framework` | enum `Framework` {SPRING_MVC, REST_TEMPLATE, WEB_CLIENT} | Which detector matched. |
+| `framework` | enum `Framework` {SPRING_MVC, REST_TEMPLATE, WEB_CLIENT, FEIGN} | Which detector matched. |
 | `externalIdentifier` | `ExternalIdentifier` | Route + method + resolution (above). |
 | `payloadType` | string | FQN of the in/out Java type, or `<unknown>` if unresolved (FR-009). |
 | `payloadResolved` | boolean | False when `payloadType` is the unknown marker. |

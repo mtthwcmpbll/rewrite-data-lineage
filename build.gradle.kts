@@ -65,6 +65,8 @@ dependencies {
     testRuntimeOnly("org.springframework:spring-web:latest.release")
     testRuntimeOnly("org.springframework:spring-webflux:latest.release")
     testRuntimeOnly("io.projectreactor:reactor-core:latest.release")
+    // Feign's @FeignClient so fixtures type-resolve the outbound declarative-client annotation.
+    testRuntimeOnly("org.springframework.cloud:spring-cloud-openfeign-core:4.1.+")
 }
 
 signing {

@@ -21,7 +21,7 @@ public abstract class LineageRecipeTest implements RewriteTest {
         spec.recipe(new FindHttpDataLineage())
                 .parser(JavaParser.fromJavaVersion().classpath(
                         "spring-web", "spring-webflux", "spring-beans", "spring-context",
-                        "spring-core", "reactor-core"));
+                        "spring-core", "reactor-core", "spring-cloud-openfeign-core"));
     }
 
     /**

@@ -19,8 +19,10 @@ What it detects:
 - **Inbound (SOURCE)** — Spring MVC controller handlers (`@Controller`/`@RestController` +
   `@RequestMapping`/`@GetMapping`/…, including meta-annotations); `@RequestBody`/`@RequestParam`/
   `@PathVariable`/`@RequestHeader` parameters seed the taint analysis.
-- **Outbound (SINK)** — `RestTemplate` HTTP methods and the `WebClient` fluent chain
-  (`…uri(…)…bodyValue(…)…retrieve()`).
+- **Outbound (SINK)** — `RestTemplate` HTTP methods, the `WebClient` fluent chain
+  (`…uri(…)…bodyValue(…)…retrieve()`), and Spring Cloud OpenFeign `@FeignClient` interface methods
+  (the outbound contract is declared on the interface method; its `@FeignClient` `name` becomes the
+  target service authority).
 - **Chains** — request data traced inbound&rarr;outbound across methods within the repository, emitted
   as an ordered per-hop edge sequence. A sink fed only by local/constant data yields **no** chain.
 

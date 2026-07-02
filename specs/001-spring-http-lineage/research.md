@@ -125,9 +125,21 @@ detector walks the fluent chain to a single logical sink.
 blocking (`RestTemplate`) and reactive-client (`WebClient`) APIs matches the user's chosen scope.
 
 **Alternatives considered**:
-- *Feign `@FeignClient`* — explicitly out of scope for the MVP (deferred). Noted so the sink matcher
-  is structured to add it later without reshaping the schema.
 - *Raw `java.net.http` / OkHttp / Apache HttpClient* — out of scope; Spring clients only.
+
+**Post-MVP addition — Feign `@FeignClient` (added 2026-07-02).** Running the MVP against the
+ModerneTraining workspace showed every inter-service call there is Feign, so RestTemplate/WebClient
+alone produced zero outbound sinks. Feign was brought into scope. Unlike RestTemplate/WebClient (where
+the sink is a call *expression*), a Feign endpoint is *declared* on a `@FeignClient` interface method
+with Spring MVC mapping annotations — structurally the mirror of an inbound controller handler. So the
+detector (`sink/FeignClientSink`) reuses the shared `source/RequestMappings` extraction: one SINK node
+per `@FeignClient` method, route = `@FeignClient(path=…)` prefix + method mapping, `targetAuthority` =
+the `@FeignClient` `name` (logical service id). This makes an outbound Feign `POST /api/x` carry the
+same `(httpMethod, routeTemplate)` join key as the inbound controller it targets — validated on the
+workspace: all 4 Feign sinks joined to their target service's inbound handler with zero dangling edges.
+Scoped to the declared contract (catalog); tracing request data *into* a Feign call site (chains) is a
+follow-up, as `JavaType.Method` does not carry annotation attribute values at a call site, so it needs
+a two-pass call-site→declaration resolution.
 
 ## R5 — External identifier normalization (cross-repo join key)
 

@@ -5,8 +5,6 @@ import com.snowfort.recipe.lineage.model.Direction;
 import com.snowfort.recipe.lineage.model.ExternalIdentifier;
 import com.snowfort.recipe.lineage.model.Framework;
 import com.snowfort.recipe.lineage.model.HttpMethod;
-import com.snowfort.recipe.lineage.model.Resolution;
-import com.snowfort.recipe.lineage.model.Routes;
 import org.jspecify.annotations.Nullable;
 import org.openrewrite.java.MethodMatcher;
 import org.openrewrite.java.tree.Expression;
@@ -69,19 +67,9 @@ public final class RestTemplateSink {
         }
 
         Expression uriArg = args.isEmpty() ? null : args.get(0);
-        ExternalIdentifier id = identifierFor(uriArg, httpMethod);
+        ExternalIdentifier id = UriResolver.resolve(uriArg, httpMethod);
         String payloadType = bodyArg >= 0 && bodyArg < args.size() ? typeName(args.get(bodyArg)) : "";
         return new Detection(Direction.SINK, Framework.REST_TEMPLATE, id, payloadType);
-    }
-
-    private ExternalIdentifier identifierFor(@Nullable Expression uriArg, HttpMethod httpMethod) {
-        String raw = literalString(uriArg);
-        if (raw == null) {
-            // Dynamically-built URL: record the sink but do not guess a route (FR-009, C7).
-            return new ExternalIdentifier(httpMethod, "", null, Resolution.UNKNOWN);
-        }
-        return new ExternalIdentifier(httpMethod, Routes.pathTemplate(raw), Routes.authorityOf(raw),
-                Resolution.EXACT);
     }
 
     private HttpMethod exchangeMethod(List<Expression> args) {
@@ -103,13 +91,6 @@ public final class RestTemplateSink {
         } catch (IllegalArgumentException e) {
             return HttpMethod.UNKNOWN;
         }
-    }
-
-    private static @Nullable String literalString(@Nullable Expression e) {
-        if (e instanceof J.Literal && ((J.Literal) e).getValue() instanceof String) {
-            return (String) ((J.Literal) e).getValue();
-        }
-        return null;
     }
 
     private static String typeName(@Nullable Expression e) {

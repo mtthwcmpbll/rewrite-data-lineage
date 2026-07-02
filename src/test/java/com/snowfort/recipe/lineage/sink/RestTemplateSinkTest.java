@@ -67,6 +67,56 @@ class RestTemplateSinkTest extends LineageRecipeTest {
     }
 
     @Test
+    void dynamicUrlWithKnownPrefixIsPartialNotGuessed() {
+        rewriteRun(
+                spec -> spec.afterRecipe(run -> assertThat(nodeRows(run)).singleElement().satisfies(r -> {
+                    assertThat(r.getRouteResolution()).isEqualTo("PARTIAL");
+                    // Known path prefix plus a placeholder — the concrete id is never guessed (FR-009, C7).
+                    assertThat(r.getRouteTemplate()).isEqualTo("/orders/{...}");
+                    assertThat(r.getTargetAuthority()).isEqualTo("inventory");
+                })),
+                java(
+                        """
+                        package com.example;
+                        import org.springframework.web.client.RestTemplate;
+
+                        class OrderClient {
+                            private final RestTemplate rest = new RestTemplate();
+                            void send(String id, Order o) {
+                                rest.postForObject("http://inventory/orders/" + id, o, String.class);
+                            }
+                        }
+                        class Order {}
+                        """
+                )
+        );
+    }
+
+    @Test
+    void fullyDynamicUrlIsUnknownWithNoRoute() {
+        rewriteRun(
+                spec -> spec.afterRecipe(run -> assertThat(nodeRows(run)).singleElement().satisfies(r -> {
+                    assertThat(r.getRouteResolution()).isEqualTo("UNKNOWN");
+                    assertThat(r.getRouteTemplate()).isBlank();
+                })),
+                java(
+                        """
+                        package com.example;
+                        import org.springframework.web.client.RestTemplate;
+
+                        class OrderClient {
+                            private final RestTemplate rest = new RestTemplate();
+                            void send(String url, Order o) {
+                                rest.postForObject(url, o, String.class);
+                            }
+                        }
+                        class Order {}
+                        """
+                )
+        );
+    }
+
+    @Test
     void ignoresNonRestTemplateCall() {
         rewriteRun(
                 spec -> spec.afterRecipe(run -> assertThat(nodeRows(run)).isEmpty()),

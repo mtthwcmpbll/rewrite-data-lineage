@@ -5,8 +5,6 @@ import com.snowfort.recipe.lineage.model.Direction;
 import com.snowfort.recipe.lineage.model.ExternalIdentifier;
 import com.snowfort.recipe.lineage.model.Framework;
 import com.snowfort.recipe.lineage.model.HttpMethod;
-import com.snowfort.recipe.lineage.model.Resolution;
-import com.snowfort.recipe.lineage.model.Routes;
 import org.jspecify.annotations.Nullable;
 import org.openrewrite.java.tree.Expression;
 import org.openrewrite.java.tree.J;
@@ -49,7 +47,9 @@ public final class WebClientSink {
         }
 
         HttpMethod httpMethod = httpMethod(chain);
-        ExternalIdentifier id = identifierFor(chain.get("uri"), httpMethod);
+        J.MethodInvocation uri = chain.get("uri");
+        Expression uriArg = uri == null || uri.getArguments().isEmpty() ? null : uri.getArguments().get(0);
+        ExternalIdentifier id = UriResolver.resolve(uriArg, httpMethod);
         String payloadType = payloadType(chain);
         return new Detection(Direction.SINK, Framework.WEB_CLIENT, id, payloadType);
     }
@@ -86,15 +86,6 @@ public final class WebClientSink {
         return HttpMethod.UNKNOWN;
     }
 
-    private ExternalIdentifier identifierFor(J.@Nullable MethodInvocation uri, HttpMethod httpMethod) {
-        String raw = uri == null || uri.getArguments().isEmpty() ? null : literalString(uri.getArguments().get(0));
-        if (raw == null) {
-            return new ExternalIdentifier(httpMethod, "", null, Resolution.UNKNOWN);
-        }
-        return new ExternalIdentifier(httpMethod, Routes.pathTemplate(raw), Routes.authorityOf(raw),
-                Resolution.EXACT);
-    }
-
     private String payloadType(Map<String, J.MethodInvocation> chain) {
         J.MethodInvocation body = chain.get("bodyValue");
         if (body == null) {
@@ -114,12 +105,5 @@ public final class WebClientSink {
 
     private static boolean isWebClientType(@Nullable Expression e) {
         return e != null && TypeUtils.isAssignableTo(WEB_CLIENT, e.getType());
-    }
-
-    private static @Nullable String literalString(@Nullable Expression e) {
-        if (e instanceof J.Literal && ((J.Literal) e).getValue() instanceof String) {
-            return (String) ((J.Literal) e).getValue();
-        }
-        return null;
     }
 }

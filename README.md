@@ -1,6 +1,43 @@
 # Rewrite data lineage
 
-This repository serves as a template for building your own recipe JARs and publishing them to a repository where they can be applied on [app.moderne.io](https://app.moderne.io) against all the public OSS code that is included there.
+This repository builds OpenRewrite/Moderne recipes that extract **HTTP data lineage** from Spring Boot
+services — cataloging where external data enters and leaves a service, and tracing request payloads
+from an inbound endpoint to an outbound call across method boundaries.
+
+## `FindHttpDataLineage` recipe
+
+`com.snowfort.recipe.lineage.FindHttpDataLineage` is a non-destructive `ScanningRecipe` that emits two
+OpenRewrite data tables and never modifies source (constitution Principle IV):
+
+| Data table | One row per | Key columns |
+|------------|-------------|-------------|
+| `HttpDataNodes` | inbound endpoint (SOURCE) or outbound call (SINK) | `direction`, `framework`, `httpMethod`, `routeTemplate`, `routeResolution`, `targetAuthority`, `payloadType`, location |
+| `DataFlowChains` | edge on a source&rarr;sink path | `sourceNodeId`, `sinkNodeId`, `edgeIndex`, `fromMethodFqn`, `toMethodFqn`, `taintedArgPositions` |
+
+What it detects:
+
+- **Inbound (SOURCE)** — Spring MVC controller handlers (`@Controller`/`@RestController` +
+  `@RequestMapping`/`@GetMapping`/…, including meta-annotations); `@RequestBody`/`@RequestParam`/
+  `@PathVariable`/`@RequestHeader` parameters seed the taint analysis.
+- **Outbound (SINK)** — `RestTemplate` HTTP methods and the `WebClient` fluent chain
+  (`…uri(…)…bodyValue(…)…retrieve()`).
+- **Chains** — request data traced inbound&rarr;outbound across methods within the repository, emitted
+  as an ordered per-hop edge sequence. A sink fed only by local/constant data yields **no** chain.
+
+Cross-repo-joinable identifiers: inbound and outbound routes are normalized identically to a path-only
+template (`/orders/{id}`) with the outbound scheme+host kept separately in `targetAuthority`, so a
+future cross-repo phase can join `SINK`→`SOURCE` by `(httpMethod, routeTemplate)`. Dynamic URLs are
+marked `PARTIAL`/`UNKNOWN` rather than guessed.
+
+This implements design Phases 1–3 + 5 from [`docs/DESIGN.md`](docs/DESIGN.md): the schema
+(`DataFlowNode`/`CallChainEdge`/`ExternalIdentifier`), the HTTP source/sink catalog, intra- and
+inter-procedural taint into a raw call chain, and join-ready external identifiers. Transform
+classification, library summaries, and the cross-repo join itself are later phases. The feature spec
+and task breakdown live under [`specs/001-spring-http-lineage/`](specs/001-spring-http-lineage/).
+
+---
+
+The sections below are the OpenRewrite recipe-module starter documentation (build, test, publish).
 
 To begin, fork this repository and customize it by:
 

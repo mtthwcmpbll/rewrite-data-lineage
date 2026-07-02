@@ -132,13 +132,13 @@ PARTIAL/UNKNOWN (quickstart scenario 3; SC-006, contract C7).
 
 ### Tests for User Story 3 (write first, must fail)
 
-- [ ] T029 [P] [US3] Identifier-symmetry test in `src/test/java/com/snowfort/recipe/lineage/model/ExternalIdentifierTest.java`: inbound `@GetMapping("/orders/{id}")` and outbound `uri("/orders/{id}")` produce equal identifiers (SC-006).
-- [ ] T030 [P] [US3] Dynamic-URL resolution test (in the sink tests): a runtime-built outbound URL yields `routeResolution=PARTIAL` or `UNKNOWN`, never a guessed literal (FR-009, C7).
+- [X] T029 [P] [US3] Identifier-symmetry test in `src/test/java/com/snowfort/recipe/lineage/model/ExternalIdentifierTest.java`: inbound `@GetMapping("/orders/{id}")` and outbound `uri("/orders/{id}")` produce equal identifiers (SC-006); plus a pure-model `matchesRoute` assertion.
+- [X] T030 [P] [US3] Dynamic-URL resolution test in `RestTemplateSinkTest`: a known-prefix concatenation yields `routeResolution=PARTIAL` with `/orders/{...}`; a fully-dynamic URL yields `UNKNOWN` with no route — never a guessed literal (FR-009, C7).
 
 ### Implementation for User Story 3
 
-- [ ] T031 [US3] Harden `ExternalIdentifier` normalization for symmetric inbound/outbound construction: class+method path join for inbound; for outbound, extract the path-only `routeTemplate` and the scheme+host into `targetAuthority` (never fold host into the route), in `model/ExternalIdentifier.java` and the detectors (depends on T017, T018, T019).
-- [ ] T032 [US3] Implement dynamic/unresolved URL → `PARTIAL`/`UNKNOWN` resolution marking in `RestTemplateSink`/`WebClientSink` (depends on T031).
+- [X] T031 [US3] `ExternalIdentifier` normalization is symmetric inbound/outbound: `SpringMvcSource` joins class+method path for inbound; outbound detectors extract the path-only `routeTemplate` and put scheme+host in `targetAuthority` via `Routes.pathTemplate`/`authorityOf` (host never folded into the route). Verified by T029.
+- [X] T032 [US3] Implement dynamic/unresolved URL → `PARTIAL`/`UNKNOWN` marking in a shared `sink/UriResolver.java` used by both `RestTemplateSink` and `WebClientSink`: string literal → EXACT, leading-literal concatenation → PARTIAL (known prefix + `{...}`), otherwise UNKNOWN.
 
 **Checkpoint**: All three stories independently functional; identifiers are join-ready for a future cross-repo phase.
 
@@ -148,11 +148,11 @@ PARTIAL/UNKNOWN (quickstart scenario 3; SC-006, contract C7).
 
 **Purpose**: Determinism, precision/recall evidence, docs, and final validation.
 
-- [ ] T033 [P] Determinism test in `FindHttpDataLineageTest`: run the recipe twice over identical source and assert byte-identical table output (SC-004, C8) and that no fixture source is modified (FR-011).
-- [ ] T034 [P] Precision/recall fixture set in `src/test/java/com/snowfort/recipe/lineage/fixtures/`: a representative multi-endpoint Spring service fixture; assert detection ≥95% recall / ≤5% false positives against a known ground-truth list (SC-001).
-- [ ] T035 [P] Review every recipe's `getDisplayName`/`getDescription` and add an optional declarative aggregate entry/doc in `rewrite.yml` if useful (Principle I; contracts/recipes.md).
-- [ ] T036 [P] Update `README.md`/`docs/` to document the `FindHttpDataLineage` recipe and map it to design Phases 1–3+5.
-- [ ] T037 Run all four `quickstart.md` validation scenarios and confirm `./gradlew build` is green.
+- [X] T033 [P] Determinism test in `FindHttpDataLineageTest.tableOutputIsByteIdenticalAcrossRuns`: run the recipe twice over identical source and assert byte-identical serialized table output (SC-004, C8); single-argument fixtures also assert no fixture source is modified (FR-011).
+- [X] T034 [P] Precision/recall fixture set in `src/test/java/com/snowfort/recipe/lineage/fixtures/PrecisionRecallTest.java`: a representative multi-endpoint Spring service (3 sources + 2 sinks) interleaved with look-alikes; exact-count assertions demonstrate 100% recall / 0% false positives, inside the ≥95% / ≤5% thresholds (SC-001).
+- [X] T035 [P] Reviewed `getDisplayName`/`getDescription` — they match `contracts/recipes.md` exactly. No declarative `rewrite.yml` aggregate added: a single top-level recipe with internal detector collaborators does not warrant one (YAGNI, Principle V; contracts/recipes.md states detectors are not separately activatable).
+- [X] T036 [P] Documented the `FindHttpDataLineage` recipe in `README.md` (both data tables, detection scope, join-ready identifiers) and mapped it to design Phases 1–3+5.
+- [X] T037 Confirmed all four `quickstart.md` scenarios are covered by passing tests (catalog, cross-method lineage, identifier symmetry, determinism) and `./gradlew clean build` is green (25 tests, 0 failures).
 
 ---
 

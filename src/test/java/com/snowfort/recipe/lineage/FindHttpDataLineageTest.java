@@ -1,8 +1,12 @@
 package com.snowfort.recipe.lineage;
 
 import com.snowfort.recipe.lineage.table.DataFlowChainTable;
+import com.snowfort.recipe.lineage.table.HttpDataNodeTable;
 import org.junit.jupiter.api.Test;
+import org.openrewrite.RecipeRun;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -112,5 +116,62 @@ class FindHttpDataLineageTest extends LineageRecipeTest {
                         """
                 )
         );
+    }
+
+    @Test
+    void tableOutputIsByteIdenticalAcrossRuns() {
+        String fixture =
+                """
+                package com.example;
+                import org.springframework.web.bind.annotation.*;
+                import org.springframework.web.client.RestTemplate;
+
+                @RestController
+                class DeterminismController {
+                    private final Relay relay = new Relay();
+                    @PostMapping("/a")
+                    String a(@RequestBody Order order) {
+                        return relay.push(order);
+                    }
+                    @PostMapping("/b")
+                    String b(@RequestBody Order order) {
+                        return relay.push(order);
+                    }
+                }
+
+                class Relay {
+                    private final RestTemplate rest = new RestTemplate();
+                    String push(Order o) {
+                        return rest.postForObject("http://inventory/reserve", o, String.class);
+                    }
+                }
+                class Order {}
+                """;
+
+        List<String> first = new ArrayList<>();
+        List<String> second = new ArrayList<>();
+        rewriteRun(spec -> spec.afterRecipe(run -> first.addAll(serialize(run))), java(fixture));
+        rewriteRun(spec -> spec.afterRecipe(run -> second.addAll(serialize(run))), java(fixture));
+
+        assertThat(first).isNotEmpty();
+        assertThat(second).as("byte-identical output across identical runs (SC-004, C8)").isEqualTo(first);
+    }
+
+    /** Flatten both tables to a stable string list, in emission order, for cross-run comparison. */
+    private static List<String> serialize(RecipeRun run) {
+        List<String> lines = new ArrayList<>();
+        for (HttpDataNodeTable.Row n : nodeRows(run)) {
+            lines.add(String.join("|", "NODE", n.getNodeId(), n.getDirection(), n.getFramework(),
+                    n.getHttpMethod(), n.getRouteTemplate(), n.getRouteResolution(), n.getTargetAuthority(),
+                    n.getPayloadType(), String.valueOf(n.isPayloadResolved()), n.getFilePath(),
+                    n.getMethodFqn(), String.valueOf(n.getLine())));
+        }
+        for (DataFlowChainTable.Row c : chainRows(run)) {
+            lines.add(String.join("|", "CHAIN", c.getSourceNodeId(), c.getSinkNodeId(),
+                    String.valueOf(c.getEdgeIndex()), c.getFromMethodFqn(), c.getToMethodFqn(),
+                    c.getCallSiteFile(), String.valueOf(c.getCallSiteLine()), c.getTaintedArgPositions(),
+                    String.valueOf(c.isTaintedReturn())));
+        }
+        return lines;
     }
 }

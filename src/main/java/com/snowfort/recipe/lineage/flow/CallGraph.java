@@ -29,6 +29,14 @@ import java.util.TreeSet;
  */
 public final class CallGraph {
 
+    /**
+     * How a sink edge maps back to its catalog node: an {@code EXPRESSION} sink (RestTemplate /
+     * WebClient) is the call expression itself, matched by (caller, printed expression); a
+     * {@code DECLARATION} sink (Feign) is a call to a method whose declaration is the cataloged node,
+     * matched by the resolved callee FQN.
+     */
+    public enum SinkKind { EXPRESSION, DECLARATION }
+
     /** A single call site: either an in-repo method call or an outbound HTTP sink call. */
     public static final class Edge {
         final String callerFqn;
@@ -39,15 +47,25 @@ public final class CallGraph {
         final Map<Integer, Set<Integer>> argToCallerParams;
         /** Sink edges only: the printed sink expression, used to recompute the catalog nodeId. */
         final @Nullable String sinkExpression;
+        /** Sink edges only: how this edge maps to its catalog node ({@code null} for call edges). */
+        final @Nullable SinkKind sinkKind;
 
         Edge(String callerFqn, String calleeFqn, boolean sink, String callSiteFile,
-             Map<Integer, Set<Integer>> argToCallerParams, @Nullable String sinkExpression) {
+             Map<Integer, Set<Integer>> argToCallerParams, @Nullable String sinkExpression,
+             @Nullable SinkKind sinkKind) {
             this.callerFqn = callerFqn;
             this.calleeFqn = calleeFqn;
             this.sink = sink;
             this.callSiteFile = callSiteFile;
             this.argToCallerParams = argToCallerParams;
             this.sinkExpression = sinkExpression;
+            this.sinkKind = sinkKind;
+        }
+
+        /** Copy of this call edge re-typed as a declaration sink (Feign call-site promotion). */
+        Edge asDeclarationSink() {
+            return new Edge(callerFqn, calleeFqn, true, callSiteFile, argToCallerParams, null,
+                    SinkKind.DECLARATION);
         }
 
         public boolean isSink() {
@@ -58,8 +76,16 @@ public final class CallGraph {
             return callerFqn;
         }
 
+        public String getCalleeFqn() {
+            return calleeFqn;
+        }
+
         public @Nullable String getSinkExpression() {
             return sinkExpression;
+        }
+
+        public @Nullable SinkKind getSinkKind() {
+            return sinkKind;
         }
     }
 
@@ -79,15 +105,38 @@ public final class CallGraph {
     public void addCall(String callerFqn, String calleeFqn, String callSiteFile,
                         Map<Integer, Set<Integer>> argToCallerParams) {
         edgesByCaller.computeIfAbsent(callerFqn, k -> new ArrayList<>())
-                .add(new Edge(callerFqn, calleeFqn, false, callSiteFile, argToCallerParams, null));
+                .add(new Edge(callerFqn, calleeFqn, false, callSiteFile, argToCallerParams, null, null));
     }
 
     public Edge addSink(String callerFqn, String calleeFqn, String callSiteFile,
                         Map<Integer, Set<Integer>> argToCallerParams, String sinkExpression) {
-        Edge edge = new Edge(callerFqn, calleeFqn, true, callSiteFile, argToCallerParams, sinkExpression);
+        Edge edge = new Edge(callerFqn, calleeFqn, true, callSiteFile, argToCallerParams, sinkExpression,
+                SinkKind.EXPRESSION);
         edgesByCaller.computeIfAbsent(callerFqn, k -> new ArrayList<>()).add(edge);
         sinkEdges.add(edge);
         return edge;
+    }
+
+    /**
+     * Promote already-recorded call edges into declaration sinks: any call whose resolved callee is in
+     * {@code declarationSinkFqns} (the cataloged Feign endpoint method FQNs) becomes a sink terminating
+     * at that declaration node. Called in the generate phase once every declaration is known, so it is
+     * robust to scan-visitation order. The original call edge is left in place (a harmless leaf for
+     * taint propagation); only the new sink edge participates in chain emission.
+     */
+    public void promoteDeclarationSinks(Set<String> declarationSinkFqns) {
+        if (declarationSinkFqns.isEmpty()) {
+            return;
+        }
+        List<Edge> promoted = new ArrayList<>();
+        for (List<Edge> edges : edgesByCaller.values()) {
+            for (Edge e : edges) {
+                if (!e.sink && declarationSinkFqns.contains(e.calleeFqn)) {
+                    promoted.add(e.asDeclarationSink());
+                }
+            }
+        }
+        sinkEdges.addAll(promoted);
     }
 
     public void addSource(String fqn, Set<Integer> originPositions, DataFlowNode node) {

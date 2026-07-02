@@ -9,6 +9,7 @@ import com.snowfort.recipe.lineage.model.DataFlowNode;
 import com.snowfort.recipe.lineage.model.Detection;
 import com.snowfort.recipe.lineage.model.Direction;
 import com.snowfort.recipe.lineage.model.ExternalIdentifier;
+import com.snowfort.recipe.lineage.model.Framework;
 import com.snowfort.recipe.lineage.source.SpringMvcInbound;
 import com.snowfort.recipe.lineage.source.SpringMvcSource;
 import com.snowfort.recipe.lineage.sink.FeignClientSink;
@@ -35,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -260,6 +262,9 @@ public class FindHttpDataLineage extends ScanningRecipe<LineageAccumulator> {
         // US2: reconstruct ordered source->sink chains from the repo-local call graph, sorted for
         // deterministic, referentially-intact output (I1, SC-004).
         CallGraph cg = acc.callGraph();
+        // A Feign endpoint's SINK is its declaration; promote call sites invoking it into sink edges so
+        // request data flowing into the Feign call is traced (now that every declaration is known).
+        cg.promoteDeclarationSinks(feignSinkMethodFqns(nodes));
         List<CallChainEdge> chainRows = new ArrayList<>();
         for (CallGraph.Edge sinkEdge : cg.getSinkEdges()) {
             DataFlowNode sinkNode = findSinkNode(nodes, sinkEdge);
@@ -281,16 +286,39 @@ public class FindHttpDataLineage extends ScanningRecipe<LineageAccumulator> {
         return Collections.emptyList();
     }
 
-    /** The catalog SINK node backing a call-graph sink edge (matched by method + printed expression). */
+    /**
+     * The catalog SINK node backing a call-graph sink edge. An EXPRESSION sink (RestTemplate/WebClient)
+     * lives at the call site, matched by (enclosing method, printed expression); a DECLARATION sink
+     * (Feign) lives at the endpoint declaration, matched by the resolved callee method FQN.
+     */
     private static @Nullable DataFlowNode findSinkNode(List<DataFlowNode> nodes, CallGraph.Edge sinkEdge) {
+        boolean declaration = sinkEdge.getSinkKind() == CallGraph.SinkKind.DECLARATION;
         for (DataFlowNode n : nodes) {
-            if (n.getDirection() == Direction.SINK &&
-                n.getLocator().getMethodFqn().equals(sinkEdge.getCallerFqn()) &&
-                n.getLocator().getExpression().equals(sinkEdge.getSinkExpression())) {
+            if (n.getDirection() != Direction.SINK) {
+                continue;
+            }
+            if (declaration) {
+                if (n.getFramework() == Framework.FEIGN &&
+                    n.getLocator().getMethodFqn().equals(sinkEdge.getCalleeFqn())) {
+                    return n;
+                }
+            } else if (n.getLocator().getMethodFqn().equals(sinkEdge.getCallerFqn()) &&
+                       n.getLocator().getExpression().equals(sinkEdge.getSinkExpression())) {
                 return n;
             }
         }
         return null;
+    }
+
+    /** The method FQNs of every cataloged Feign endpoint declaration (chain-sink lookup keys). */
+    private static Set<String> feignSinkMethodFqns(List<DataFlowNode> nodes) {
+        Set<String> fqns = new HashSet<>();
+        for (DataFlowNode n : nodes) {
+            if (n.getDirection() == Direction.SINK && n.getFramework() == Framework.FEIGN) {
+                fqns.add(n.getLocator().getMethodFqn());
+            }
+        }
+        return fqns;
     }
 
     private static DataFlowNode buildNode(Cursor cursor, Detection d, String methodFqn, String expression) {

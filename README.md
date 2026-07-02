@@ -24,7 +24,9 @@ What it detects:
   (the outbound contract is declared on the interface method; its `@FeignClient` `name` becomes the
   target service authority).
 - **Chains** — request data traced inbound&rarr;outbound across methods within the repository, emitted
-  as an ordered per-hop edge sequence. A sink fed only by local/constant data yields **no** chain.
+  as an ordered per-hop edge sequence, for RestTemplate/WebClient call expressions and Feign call sites
+  alike (a Feign chain terminates at the `@FeignClient` declaration node). A sink fed only by
+  local/constant data yields **no** chain.
 
 Cross-repo-joinable identifiers: inbound and outbound routes are normalized identically to a path-only
 template (`/orders/{id}`) with the outbound scheme+host kept separately in `targetAuthority`, so a

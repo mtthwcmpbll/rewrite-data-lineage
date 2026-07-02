@@ -137,9 +137,18 @@ per `@FeignClient` method, route = `@FeignClient(path=…)` prefix + method mapp
 the `@FeignClient` `name` (logical service id). This makes an outbound Feign `POST /api/x` carry the
 same `(httpMethod, routeTemplate)` join key as the inbound controller it targets — validated on the
 workspace: all 4 Feign sinks joined to their target service's inbound handler with zero dangling edges.
-Scoped to the declared contract (catalog); tracing request data *into* a Feign call site (chains) is a
-follow-up, as `JavaType.Method` does not carry annotation attribute values at a call site, so it needs
-a two-pass call-site→declaration resolution.
+
+**Feign call-site chains (added 2026-07-02).** Beyond the declaration catalog, request data flowing
+*into* a Feign call is now traced. A call site invoking a Feign method is already recorded as an
+ordinary call-graph edge during scan; in the generate phase — once every declaration is known, so it
+is robust to scan-visitation order — `CallGraph.promoteDeclarationSinks` promotes any call edge whose
+resolved callee is a cataloged Feign endpoint into a sink edge terminating at the declaration node
+(matched by callee FQN). This reuses the existing position-aware propagation, so single- and multi-hop
+chains (controller → service → Feign call) and the FR-007 constant-fed negative fall out unchanged, and
+it sidesteps needing call-site annotation-attribute attribution (which `JavaType.Method` does not
+carry) by keying off the reliable declaration detection. Validated on the workspace: 3 chains —
+`OrderController → FraudClient`, and `FraudCheckController → {KycClient, RiskScoreClient}` — showing an
+order payload transitively reaches the fraud, KYC, and risk-score services.
 
 ## R5 — External identifier normalization (cross-repo join key)
 

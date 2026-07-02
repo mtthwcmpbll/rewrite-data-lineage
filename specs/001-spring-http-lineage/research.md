@@ -36,6 +36,40 @@ This removes the need to hand-build a call graph. **However**, the public `Summa
 FlowGraph traversal is the remaining, non-trivial work for User Story 2 and should be prototyped
 against these structures before committing to the CallChainEdge shape.
 
+**Prototype outcome (landed):** A working US2 prototype wires `GlobalDataFlow.accumulator(HttpFlowSpec)`
+into the scan phase (composed with US1 node detection) and emits `DataFlowChains` rows in the edit
+phase from `accumulator.isSink(cursor)` reachability. Validated by `HttpFlowChainTest`: it traces
+`@RequestBody` -> `service.forward(order)` -> `RestTemplate.postForObject(url, o, ...)` across method
+boundaries, pairs the source and sink nodes, records the tainted argument position, and correctly
+emits no chain for a constant-fed sink (FR-007). Scoped deliberately: sources = inbound handler
+params, sinks = RestTemplate arguments (WebClient's reactive generics don't type-resolve for
+dataflow). Known prototype limitations, still to productionize (T025-T028): (1) chain rows are
+reachability-level single edges, not the full ordered per-method `CallChainEdge` sequence — that needs
+the FlowGraph traversal above; (2) source/sink pairing over-approximates when multiple sources reach
+one sink (the prototype pairs every source with every reached sink); (3) RestTemplate only.
+
+**Productionized outcome (US2 complete, T022-T028).** Investigation confirmed the rich FlowGraph
+accessors (`getSourceFlowGraphs`, `getMethodCallFlowGraphs`, …) live on the **package-private**
+`GlobalDataFlowAccumulator`; the public `Summary` is only `isSource/isSink/isFlowParticipant`
+booleans. Reaching the per-edge structure would require reflection into OpenRewrite internals over
+`fj.data` types — brittle. Per the chosen design, the ordered chain is instead reconstructed with a
+**repo-local call graph + parameter-reference (local) taint**, using only public APIs:
+- `flow/ParamRefs.java` — intra-procedural taint approximation: per method, which parameter positions
+  each expression references (direct references + simple local aliasing to a fixed point). This is the
+  `LocalTaint` role (T025).
+- `flow/CallGraph.java` — every in-repo call and outbound sink accumulated in the scan phase as
+  position-annotated edges (T026); position-aware fixed-point propagation from each source's inbound
+  parameters, with first-reach parent tracking to reconstruct the ordered per-hop path (T027). This is
+  the `CallGraphReachability` role.
+- Generate phase emits ordered `DataFlowChains` rows, sorted by `(sourceNodeId, sinkNodeId, edgeIndex)`,
+  referentially intact with node rows, with no chain to untainted sinks (T028).
+
+All three prototype limitations are resolved: (1) full ordered `CallChainEdge` sequence with per-edge
+`fromMethodFqn`/`toMethodFqn`/`taintedArgPositions`; (2) multi-source disambiguation (only sources
+whose taint actually reaches a sink are paired); (3) WebClient chains are traced (the call graph does
+not depend on `GlobalDataFlow` resolving reactive generics — the payload is taken from the
+`bodyValue`/`body` link). `GlobalDataFlow` remains wired as the retained inter-procedural oracle.
+
 ## R2 — Propagation model (method summaries)
 
 **Decision**: Model each method as a summary: which parameter positions (and receiver) are tainted-in

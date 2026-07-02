@@ -1,12 +1,16 @@
 package com.snowfort.recipe.lineage;
 
+import com.snowfort.recipe.lineage.table.DataFlowChainTable;
 import org.junit.jupiter.api.Test;
+
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.openrewrite.java.Assertions.java;
 
 /**
- * End-to-end catalog tests for {@link FindHttpDataLineage} (User Story 1). Uses single-argument
+ * End-to-end tests for {@link FindHttpDataLineage} (User Stories 1 &amp; 2). Uses single-argument
  * {@code java(...)} fixtures, which assert the recipe makes <em>no source changes</em> — the explicit
  * check for FR-011 / constitution Principle IV.
  */
@@ -54,6 +58,54 @@ class FindHttpDataLineageTest extends LineageRecipeTest {
                             private final RestTemplate rest = new RestTemplate();
                             void send(Order o) {
                                 rest.postForObject("http://inventory/reserve", o, String.class);
+                            }
+                        }
+                        class Order {}
+                        """
+                )
+        );
+    }
+
+    @Test
+    void chainsAreOrderedAndReferentiallyIntactWithNodes() {
+        rewriteRun(
+                spec -> spec.afterRecipe(run -> {
+                    // Invariant I1: every chain endpoint resolves to a catalogued node row.
+                    Set<String> nodeIds = nodeRows(run).stream()
+                            .map(r -> r.getNodeId()).collect(Collectors.toSet());
+                    assertThat(chainRows(run)).isNotEmpty();
+                    assertThat(chainRows(run)).allSatisfy(c -> {
+                        assertThat(nodeIds).contains(c.getSourceNodeId());
+                        assertThat(nodeIds).contains(c.getSinkNodeId());
+                    });
+                    // Edge indices for a single (source, sink) chain are a contiguous 0..n run.
+                    assertThat(chainRows(run)).extracting(DataFlowChainTable.Row::getEdgeIndex)
+                            .containsExactly(0, 1);
+                    // Deterministic sort key holds: rows are ordered by (source, sink, edgeIndex).
+                    assertThat(chainRows(run)).isSortedAccordingTo(
+                            java.util.Comparator.comparing(DataFlowChainTable.Row::getSourceNodeId)
+                                    .thenComparing(DataFlowChainTable.Row::getSinkNodeId)
+                                    .thenComparingInt(DataFlowChainTable.Row::getEdgeIndex));
+                }),
+                java(
+                        """
+                        package com.example;
+                        import org.springframework.web.bind.annotation.*;
+                        import org.springframework.web.client.RestTemplate;
+
+                        @RestController
+                        class GatewayController {
+                            private final DownstreamService service = new DownstreamService();
+                            @PostMapping("/gateway")
+                            String gateway(@RequestBody Order order) {
+                                return service.push(order);
+                            }
+                        }
+
+                        class DownstreamService {
+                            private final RestTemplate rest = new RestTemplate();
+                            String push(Order o) {
+                                return rest.postForObject("http://inventory/reserve", o, String.class);
                             }
                         }
                         class Order {}

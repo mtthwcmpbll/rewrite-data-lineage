@@ -95,18 +95,27 @@ reaches the outbound call, tracing across method/class boundaries within the rep
 SOURCE to the SINK, and assert a constant-fed outbound call produces **no** chain (quickstart scenario
 2; contracts C4, C5). Depends on US1 detectors to identify the endpoints being connected.
 
+> **COMPLETE (to contract).** Chains are now the full ordered per-edge `CallChainEdge` sequence
+> (controller→service→client emits one edge per method hop with per-edge `fromMethodFqn`/`toMethodFqn`
+> and `taintedArgPositions`), with multi-source disambiguation and WebClient support. The rich
+> `GlobalDataFlowAccumulator` FlowGraph accessors turned out to be package-private (reachable only by
+> reflection), so per the chosen design the ordered chain is reconstructed by a **repo-local call graph
+> + parameter-reference (local) taint** (`flow/CallGraph.java`, `flow/ParamRefs.java`); `GlobalDataFlow`
+> is retained as the inter-procedural reachability oracle. Task class names below are mapped to this
+> architecture: `LocalTaint` → `ParamRefs`, `CallGraphReachability` → `CallGraph`. See research.md R1.
+
 ### Tests for User Story 2 (write first, must fail)
 
-- [ ] T022 [P] [US2] Intra-procedural taint test in `src/test/java/com/snowfort/recipe/lineage/flow/LocalTaintTest.java`: within one method, a `@RequestBody` value reaching `postForObject` is detected as a taint edge; an untainted arg is not.
-- [ ] T023 [P] [US2] `CallGraphReachabilityTest` in `src/test/java/com/snowfort/recipe/lineage/flow/CallGraphReachabilityTest.java`: controller→service→client fixture yields chain edges source→sink; constant-fed sink yields no chain (FR-007).
-- [ ] T024 [P] [US2] End-to-end chain assertions in `FindHttpDataLineageTest`: `DataFlowChains` rows have correct `edgeIndex` ordering, `taintedArgPositions`, and every `sourceNodeId`/`sinkNodeId` resolves in `HttpDataNodes` (invariant I1).
+- [X] T022 [P] [US2] Intra-procedural taint test in `src/test/java/com/snowfort/recipe/lineage/flow/LocalTaintTest.java`: within one method, a `@RequestBody` value reaching `postForObject` is detected as a taint edge; an untainted arg is not (plus a local-aliasing case).
+- [X] T023 [P] [US2] `CallGraphReachabilityTest` in `src/test/java/com/snowfort/recipe/lineage/flow/CallGraphReachabilityTest.java`: controller→service→client fixture yields chain edges source→sink; constant-fed sink yields no chain (FR-007); multi-source disambiguation; WebClient chain traced.
+- [X] T024 [P] [US2] End-to-end chain assertions in `FindHttpDataLineageTest`: `DataFlowChains` rows have correct `edgeIndex` ordering, `taintedArgPositions`, deterministic sort, and every `sourceNodeId`/`sinkNodeId` resolves in `HttpDataNodes` (invariant I1).
 
 ### Implementation for User Story 2
 
-- [ ] T025 [US2] Implement `LocalTaint` in `src/main/java/com/snowfort/recipe/lineage/flow/LocalTaint.java` using `rewrite-analysis` `Dataflow`/`Taint`: seed from source params, target sinks, compute per-method taint edges and which caller-arg positions flow into each outgoing call (depends on T007, T017).
-- [ ] T026 [US2] Extend the scan phase to accumulate per-method outgoing call edges (with arg positions) and local taint facts into `MethodFlowFacts` (depends on T020, T025).
-- [ ] T027 [US2] Implement `CallGraphReachability` in `src/main/java/com/snowfort/recipe/lineage/flow/CallGraphReachability.java`: build the repo-local call graph and run the position-aware fixed-point propagation from source-containing to sink-containing methods (research R1/R2) (depends on T026).
-- [ ] T028 [US2] Emit `DataFlowChains` rows in the generate phase — ordered by `edgeIndex`, sorted deterministically, with referential integrity to node rows and no chain to untainted sinks (depends on T027, T010).
+- [X] T025 [US2] Implement local taint as `flow/ParamRefs.java` (the `LocalTaint` role): per method, map each argument to the caller-parameter positions it references (direct + simple local aliasing, fixed point). Authoritative inter-procedural reachability retained via `GlobalDataFlow` (depends on T007, T017).
+- [X] T026 [US2] Extend the scan phase to accumulate per-method outgoing call edges (with arg positions) and local taint facts into the repo-local call graph (`flow/CallGraph.java`, held by `LineageAccumulator`) (depends on T020, T025).
+- [X] T027 [US2] Implement position-aware call-graph reachability in `flow/CallGraph.java` (the `CallGraphReachability` role): fixed-point propagation from each source's inbound params to every reachable sink, with first-reach parent tracking for ordered path reconstruction (research R1/R2) (depends on T026).
+- [X] T028 [US2] Emit `DataFlowChains` rows in the generate phase — ordered by `edgeIndex`, sorted deterministically by `(sourceNodeId, sinkNodeId, edgeIndex)`, with referential integrity to node rows and no chain to untainted sinks (depends on T027, T010).
 
 **Checkpoint**: US1 + US2 work — the recipe catalogs nodes AND traces lineage across methods.
 

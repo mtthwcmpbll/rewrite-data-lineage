@@ -73,6 +73,64 @@ class SpringMvcSourceTest extends LineageRecipeTest {
     }
 
     @Test
+    void methodMappingWithNoPathInheritsClassPathAsExact() {
+        // Regression (found running on ModerneTraining): a class-level @RequestMapping plus a
+        // method mapping with no path is a fully-resolved route, not UNKNOWN.
+        rewriteRun(
+                spec -> spec.dataTable(HttpDataNodeTable.Row.class, rows -> {
+                    assertThat(rows).hasSize(1);
+                    HttpDataNodeTable.Row r = rows.get(0);
+                    assertThat(r.getHttpMethod()).isEqualTo("POST");
+                    assertThat(r.getRouteTemplate()).isEqualTo("/api/customers");
+                    assertThat(r.getRouteResolution()).isEqualTo("EXACT");
+                }),
+                java(
+                        """
+                        package com.example;
+                        import org.springframework.web.bind.annotation.*;
+
+                        @RestController
+                        @RequestMapping("/api/customers")
+                        class CustomerController {
+                            @PostMapping
+                            public String create(@RequestBody Customer customer) {
+                                return "ok";
+                            }
+                        }
+                        class Customer {}
+                        """
+                )
+        );
+    }
+
+    @Test
+    void unresolvableMappingPathIsMarkedUnknown() {
+        // A path argument that is present but not a string literal (a constant reference) cannot be
+        // resolved -> UNKNOWN, distinct from "no path argument".
+        rewriteRun(
+                spec -> spec.dataTable(HttpDataNodeTable.Row.class, rows -> {
+                    assertThat(rows).hasSize(1);
+                    assertThat(rows.get(0).getRouteResolution()).isEqualTo("UNKNOWN");
+                }),
+                java(
+                        """
+                        package com.example;
+                        import org.springframework.web.bind.annotation.*;
+
+                        @RestController
+                        class RouteController {
+                            static final String PATH = "/dynamic";
+                            @GetMapping(PATH)
+                            public String get() {
+                                return "ok";
+                            }
+                        }
+                        """
+                )
+        );
+    }
+
+    @Test
     void ignoresPlainMethodOnController() {
         rewriteRun(
                 spec -> spec.afterRecipe(run -> assertThat(nodeRows(run)).isEmpty()),

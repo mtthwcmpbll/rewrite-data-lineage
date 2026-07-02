@@ -51,10 +51,15 @@ public final class SpringMvcSource {
             return null;
         }
 
-        String methodPath = routeLiteral(mapping);
-        String classPath = classLevelPath(enclosing);
-        Resolution resolution = methodPath == null ? Resolution.UNKNOWN : Resolution.EXACT;
-        String route = Routes.join(classPath, methodPath == null ? "" : methodPath);
+        // The full route is the class-level prefix joined with the method-level path. A route is EXACT
+        // only when BOTH parts resolve — where "no path argument" resolves to an empty contribution
+        // (e.g. @PostMapping inheriting a class-level @RequestMapping), distinct from a path argument
+        // that is present but not a string literal (e.g. a constant reference), which is UNKNOWN.
+        PathPart methodPart = pathPartOf(mapping);
+        PathPart classPart = pathPartOf(firstMapping(enclosing.getLeadingAnnotations()));
+        Resolution resolution = classPart.resolved && methodPart.resolved
+                ? Resolution.EXACT : Resolution.UNKNOWN;
+        String route = Routes.join(classPart.value, methodPart.value);
 
         HttpMethod httpMethod = httpMethodOf(mapping);
         ExternalIdentifier id = new ExternalIdentifier(httpMethod, route, null, resolution);
@@ -80,9 +85,54 @@ public final class SpringMvcSource {
         return null;
     }
 
-    private @Nullable String classLevelPath(J.ClassDeclaration cd) {
-        J.Annotation mapping = firstMapping(cd.getLeadingAnnotations());
-        return mapping == null ? null : routeLiteral(mapping);
+    /** A resolved path contribution: its (possibly empty) literal value and whether it resolved. */
+    private static final class PathPart {
+        static final PathPart RESOLVED_EMPTY = new PathPart("", true);
+        final String value;
+        final boolean resolved;
+
+        PathPart(String value, boolean resolved) {
+            this.value = value;
+            this.resolved = resolved;
+        }
+    }
+
+    /**
+     * Classify a mapping annotation's path contribution: a string-literal {@code value}/{@code path}
+     * (or positional) argument resolves to that literal; no path argument at all resolves to empty
+     * (the route comes from elsewhere); a path argument that is present but not a literal is
+     * unresolved. A {@code null} annotation (no class-level mapping) contributes empty.
+     */
+    private PathPart pathPartOf(J.@Nullable Annotation a) {
+        if (a == null || a.getArguments() == null || a.getArguments().isEmpty()) {
+            return PathPart.RESOLVED_EMPTY;
+        }
+        boolean hasPathArgument = false;
+        for (Expression arg : a.getArguments()) {
+            if (arg instanceof J.Assignment) {
+                J.Assignment asg = (J.Assignment) arg;
+                if (asg.getVariable() instanceof J.Identifier) {
+                    String name = ((J.Identifier) asg.getVariable()).getSimpleName();
+                    if ("value".equals(name) || "path".equals(name)) {
+                        hasPathArgument = true;
+                        String v = literalString(asg.getAssignment());
+                        if (v != null) {
+                            return new PathPart(v, true);
+                        }
+                    }
+                }
+            } else {
+                // A positional argument is the value/path attribute.
+                hasPathArgument = true;
+                String v = literalString(arg);
+                if (v != null) {
+                    return new PathPart(v, true);
+                }
+            }
+        }
+        // A path/value argument was present but not a string literal -> unresolved; otherwise the
+        // annotation carried only non-path attributes (method=, produces=, …) -> empty path.
+        return hasPathArgument ? new PathPart("", false) : PathPart.RESOLVED_EMPTY;
     }
 
     /** Map the mapping annotation to an HTTP method; UNKNOWN for a plain @RequestMapping with no method or a custom one. */
@@ -143,33 +193,6 @@ public final class SpringMvcSource {
         } catch (IllegalArgumentException ex) {
             return HttpMethod.UNKNOWN;
         }
-    }
-
-    /** Read a String route from an annotation's positional value, or its {@code value}/{@code path} attribute. */
-    private @Nullable String routeLiteral(J.Annotation a) {
-        if (a.getArguments() == null || a.getArguments().isEmpty()) {
-            return null;
-        }
-        for (Expression arg : a.getArguments()) {
-            if (arg instanceof J.Assignment) {
-                J.Assignment asg = (J.Assignment) arg;
-                if (asg.getVariable() instanceof J.Identifier) {
-                    String name = ((J.Identifier) asg.getVariable()).getSimpleName();
-                    if ("value".equals(name) || "path".equals(name)) {
-                        String v = literalString(asg.getAssignment());
-                        if (v != null) {
-                            return v;
-                        }
-                    }
-                }
-            } else {
-                String v = literalString(arg);
-                if (v != null) {
-                    return v;
-                }
-            }
-        }
-        return null;
     }
 
     private @Nullable String literalString(Expression e) {
